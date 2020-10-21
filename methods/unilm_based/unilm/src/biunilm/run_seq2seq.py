@@ -464,23 +464,21 @@ def main():
                     global_step += 1
 
             # Save a trained model
-            logger.info("***** Loss for epoch %d = %d *****", i_epoch, loss.item())
-            if loss.item()<curr_loss:
-                curr_loss = loss.item()
-                if (args.local_rank == -1 or torch.distributed.get_rank() == 0) and loss.item()<2.5 and i_epoch%3==0:
-                    logger.info(
-                        "** ** * Saving fine-tuned model and optimizer ** ** * ")
-                    model_to_save = model.module if hasattr(
-                        model, 'module') else model  # Only save the model it-self
-                    output_model_file = os.path.join(
-                        args.output_dir, "model.{0}.bin".format(i_epoch))
-                    torch.save(model_to_save.state_dict(), output_model_file)
-                    output_optim_file = os.path.join(
-                        args.output_dir, "optim.{0}.bin".format(i_epoch))
-                    torch.save(optimizer.state_dict(), output_optim_file)
+            if (args.local_rank == -1 or torch.distributed.get_rank() == 0) and loss.item()<2.5 and i_epoch%3==0:
+                logger.info("***** Loss for epoch %d = %d *****", i_epoch, loss.item())
+                logger.info(
+                    "** ** * Saving fine-tuned model and optimizer ** ** * ")
+                model_to_save = model.module if hasattr(
+                    model, 'module') else model  # Only save the model it-self
+                output_model_file = os.path.join(
+                    args.output_dir, "model.{0}.bin".format(i_epoch))
+                torch.save(model_to_save.state_dict(), output_model_file)
+                output_optim_file = os.path.join(
+                    args.output_dir, "optim.{0}.bin".format(i_epoch))
+                torch.save(optimizer.state_dict(), output_optim_file)
 
-                    logger.info("***** CUDA.empty_cache() *****")
-                    torch.cuda.empty_cache()
+                logger.info("***** CUDA.empty_cache() *****")
+                torch.cuda.empty_cache()
 
 
 if __name__ == "__main__":

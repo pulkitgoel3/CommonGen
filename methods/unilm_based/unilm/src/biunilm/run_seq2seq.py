@@ -467,7 +467,7 @@ def main():
             logger.info("***** Loss for epoch %d = %d *****", i_epoch, loss.item())
             if loss.item()<curr_loss:
                 curr_loss = loss.item()
-                if (args.local_rank == -1 or torch.distributed.get_rank() == 0) and loss.item()<2 and i_epoch%3==0:
+                if (args.local_rank == -1 or torch.distributed.get_rank() == 0) and loss.item()<2.5 and i_epoch%3==0:
                     logger.info(
                         "** ** * Saving fine-tuned model and optimizer ** ** * ")
                     model_to_save = model.module if hasattr(

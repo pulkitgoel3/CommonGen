@@ -1708,6 +1708,7 @@ class BertForSeq2SeqDecoder(PreTrainedBertModel):
             frame_id = -1
             pos_in_frame = -1
 
+            ids=[]
             for fid in range(last_frame_id + 1):
                 for i, wid in enumerate(wids_list[fid]):
                     if wid == self.eos_id or fid == last_frame_id:
@@ -1719,15 +1720,25 @@ class BertForSeq2SeqDecoder(PreTrainedBertModel):
                             max_score = s
                             frame_id = fid
                             pos_in_frame = i
+                        ids.append((fid,i))
+            
             if frame_id == -1:
                 traces['pred_seq'].append([0])
             else:
-                seq = [wids_list[frame_id][pos_in_frame]]
-                for fid in range(frame_id, 0, -1):
-                    pos_in_frame = ptrs[fid][pos_in_frame]
-                    seq.append(wids_list[fid - 1][pos_in_frame])
-                seq.reverse()
-                traces['pred_seq'].append(seq)
+                #traces['pred_seq'].append([])
+                for k, v in ids:
+                    frame_id=k
+                    pos_in_frame=v
+                    #print(len(wids_list), len(wids_list[0]), len(wids_list[:][0]))
+                    seq = [wids_list[frame_id][pos_in_frame]]
+                    #print(seq)
+                    print(frame_id, pos_in_frame)
+                    for fid in range(frame_id, 0, -1):
+                        pos_in_frame = ptrs[fid][pos_in_frame]
+                        seq.append(wids_list[fid - 1][pos_in_frame])
+                    seq.reverse()
+                    print(seq)
+                    traces['pred_seq'].append(seq)
 
         def _pad_sequence(sequences, max_len, padding_value=0):
             trailing_dims = sequences[0].size()[1:]

@@ -214,31 +214,41 @@ def main():
                     input_ids, token_type_ids, position_ids, input_mask, mask_qkv, task_idx = batch
                     traces = model(input_ids, token_type_ids,
                                    position_ids, input_mask, task_idx=task_idx, mask_qkv=mask_qkv)
+                    print(traces['wids'][0])
+                    print(traces['wids'][0][0])
+                    print(traces['pred_seq'][0])
+
+                    print(traces['scores'][0])
+                    print(traces['pred_seq'])
+                    print(traces['wids'].shape)
+                    print(traces['ptrs'][0])
                     if args.beam_size > 1:
                         traces = {k: v.tolist() for k, v in traces.items()}
                         output_ids = traces['pred_seq']
                     else:
                         output_ids = traces.tolist()
-                    for i in range(len(buf)):
-                        w_ids = output_ids[i]
-                        output_buf = tokenizer.convert_ids_to_tokens(w_ids)
-                        output_tokens = []
-                        for t in output_buf:
-                            if t in ("[SEP]", "[PAD]"):
-                                break
-                            output_tokens.append(t)
-                        output_sequence = ' '.join(detokenize(output_tokens))
-                        output_lines[buf_id[i]] = output_sequence
-                        if args.need_score_traces:
-                            score_trace_list[buf_id[i]] = {
-                                'scores': traces['scores'][i], 'wids': traces['wids'][i], 'ptrs': traces['ptrs'][i]}
+                    output_sentences=[]
+                    for i in range(len(output_ids)):
+                            w_ids = output_ids[i]
+                            output_buf = tokenizer.convert_ids_to_tokens(w_ids)
+                            output_tokens = []
+                            for t in output_buf:
+                                if t in ("[SEP]", "[PAD]"):
+                                    break
+                                output_tokens.append(t)
+                            output_sequence = ' '.join(detokenize(output_tokens))
+                            output_sentences.append(output_sequence)
+                            #output_lines[buf_id[i]] = output_sequence
+                            if args.need_score_traces and i<len(buf):
+                                score_trace_list[buf_id[i]] = {
+                                    'scores': traces['scores'][i], 'wids': traces['wids'][i], 'ptrs': traces['ptrs'][i]}
                 pbar.update(1)
         if args.output_file:
             fn_out = args.output_file
         else:
             fn_out = model_recover_path+'.'+args.split
         with open(fn_out, "w", encoding="utf-8") as fout:
-            for l in output_lines:
+            for l in output_sentences:#output_lines:
                 fout.write(l)
                 fout.write("\n")
 

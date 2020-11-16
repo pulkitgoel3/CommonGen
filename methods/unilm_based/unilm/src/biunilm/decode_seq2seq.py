@@ -208,17 +208,17 @@ def main():
                 next_i += args.batch_size
                 max_a_len = max([len(x) for x in buf])
                 instances = []
-                print(buf[0])
+                #print(buf[0])
                 for instance in [(x, max_a_len) for x in buf]:
                     for proc in bi_uni_pipeline:
                         instances.append(proc(instance))
-                print(instances[0][0])
+                #print(instances[0][0])
                 
                 input_tokens_dict = {}
                 for i in range(len(instances)):
                     for j in range(len(buf[i])):
                         input_tokens_dict[instances[i][0][j+1]]=buf[i][j]
-                print(input_tokens_dict)
+                #print(input_tokens_dict)
                 with torch.no_grad():
                     batch = seq2seq_loader.batch_list_to_batch_tensors(
                         instances)
@@ -227,9 +227,6 @@ def main():
                     input_ids, token_type_ids, position_ids, input_mask, mask_qkv, task_idx = batch
                     traces = model(input_ids, token_type_ids,
                                    position_ids, input_mask, task_idx=task_idx, mask_qkv=mask_qkv)
-                    print(input_ids)
-                    print(token_type_ids)
-                    print(position_ids)
                     #print(traces['wids'][0])
                     #print(traces['wids'][0][0])
                     #print(traces['pred_seq'][0])
@@ -244,12 +241,20 @@ def main():
                     else:
                         output_ids = traces.tolist()
                     output_sentences=[]
-                    print("buffer len= ",str(len(buf)))
-                    print("output len= ",str(len(output_ids)))
+                    #print("buffer len= ",str(len(buf)))
+                    #print("output len= ",str(len(output_ids)))
                     for i in range(0,len(output_ids),4):
                             w_ids_set = output_ids[i:i+4]
                             input_token_ids=input_ids[i//4].cpu().numpy()[1:-1]
-                            input_tokens = [stemmer.stem(input_tokens_dict[j]) for j in input_token_ids]
+                            #print(buf[i//4])
+                            #print(input_token_ids)
+                            input_tokens = []
+                            for j in input_token_ids:
+                                if j ==102:
+                                    break
+                                input_tokens.append(stemmer.stem(input_tokens_dict[j]))
+                                input_tokens = ' '.join(input_tokens).replace(" ##","").split(' ')
+                            coverage_score=-1
                             for w_ids in w_ids_set:
                                 output_buf = tokenizer.convert_ids_to_tokens(w_ids)
                                 output_tokens = []
@@ -257,9 +262,13 @@ def main():
                                     if t in ("[SEP]", "[PAD]"):
                                         break
                                     output_tokens.append(t)
-                                output_sequence = ' '.join(detokenize(output_tokens))
-                            
-                            print(input_tokens)
+                                output_tokens=detokenize(output_tokens)
+                                score_tokens=[stemmer.stem(t) for t in output_tokens]
+                                score_tokens = ' '.join(score_tokens).replace(" ##","").split(' ')
+                                curr_score = len(set(score_tokens).intersection(input_tokens))
+                                if curr_score>coverage_score:
+                                    coverage_score=curr_score
+                                    output_sequence = ' '.join(output_tokens)
 
                             
                             '''
@@ -273,12 +282,11 @@ def main():
                             print(token_sequence)
                             '''
 
-                            print(output_sequence)
                             #output_sentences.append(output_sequence)
-                            output_lines[buf_id[i]] = output_sequence
-                            if args.need_score_traces and i<len(buf):
-                                score_trace_list[buf_id[i]] = {
-                                    'scores': traces['scores'][i], 'wids': traces['wids'][i], 'ptrs': traces['ptrs'][i]}
+                            output_lines[buf_id[i//4]] = output_sequence
+                            if args.need_score_traces:
+                                score_trace_list[buf_id[i//4]] = {
+                                    'scores': traces['scores'][i//4], 'wids': traces['wids'][i//4], 'ptrs': traces['ptrs'][i//4]}
                 pbar.update(1)
         if args.output_file:
             fn_out = args.output_file

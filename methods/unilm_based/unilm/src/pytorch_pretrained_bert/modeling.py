@@ -15,6 +15,7 @@ import tempfile
 import shutil
 import numpy as np
 from scipy.stats import truncnorm
+import heapq
 
 import torch
 from torch import nn
@@ -1704,11 +1705,11 @@ class BertForSeq2SeqDecoder(PreTrainedBertModel):
                 if all(wid == self.eos_id for wid in wids):
                     last_frame_id = i
                     break
-            max_score = -math.inf
+            max_score = [] #-math.inf
             frame_id = -1
             pos_in_frame = -1
 
-            ids=[]
+            ids={}
             for fid in range(last_frame_id + 1):
                 for i, wid in enumerate(wids_list[fid]):
                     if wid == self.eos_id or fid == last_frame_id:
@@ -1716,28 +1717,37 @@ class BertForSeq2SeqDecoder(PreTrainedBertModel):
                         if self.length_penalty > 0:
                             s /= math.pow((5 + fid + 1) / 6.0,
                                           self.length_penalty)
-                        if s > max_score:
-                            max_score = s
+                        if len(max_score)<4:
+                            heapq.heappush(max_score, s)
+                            #s > max_score:
+                            #max_score = s
                             frame_id = fid
-                            pos_in_frame = i
-                        ids.append((fid,i))
+                            #pos_in_frame = i
+                        else:
+                            heapq.heappushpop(max_score, s)
+                        ids[s]=(fid,i)
             
+            max_score = heapq.heappop(max_score)
+            ids = [v for k, v in ids.items() if k>=max_score]
+            #print(ids)
+            #print('------------------------------------------------')
             if frame_id == -1:
                 traces['pred_seq'].append([0])
             else:
                 #traces['pred_seq'].append([])
                 for k, v in ids:
+                    #print(k,v)
                     frame_id=k
                     pos_in_frame=v
                     #print(len(wids_list), len(wids_list[0]), len(wids_list[:][0]))
                     seq = [wids_list[frame_id][pos_in_frame]]
                     #print(seq)
-                    print(frame_id, pos_in_frame)
+                    #print(frame_id, pos_in_frame)
                     for fid in range(frame_id, 0, -1):
                         pos_in_frame = ptrs[fid][pos_in_frame]
                         seq.append(wids_list[fid - 1][pos_in_frame])
                     seq.reverse()
-                    print(seq)
+                    #print(seq)
                     traces['pred_seq'].append(seq)
 
         def _pad_sequence(sequences, max_len, padding_value=0):

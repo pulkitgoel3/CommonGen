@@ -24,6 +24,9 @@ from pytorch_pretrained_bert.optimization import BertAdam, warmup_linear
 from nn.data_parallel import DataParallelImbalance
 import biunilm.seq2seq_loader as seq2seq_loader
 
+import json
+from nltk.stem.snowball import SnowballStemmer
+stemmer = SnowballStemmer("english")
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                     datefmt='%m/%d/%Y %H:%M:%S',
@@ -187,10 +190,12 @@ def main():
                 logger.info("Decoding subset: %d", args.subset)
                 input_lines = input_lines[:args.subset]
         data_tokenizer = WhitespaceTokenizer() if args.tokenized_input else tokenizer
+        #print(input_lines[0])
         input_lines = [data_tokenizer.tokenize(
             x)[:max_src_length] for x in input_lines]
         input_lines = sorted(list(enumerate(input_lines)),
                              key=lambda x: -len(x[1]))
+        #print(input_lines)
         output_lines = [""] * len(input_lines)
         score_trace_list = [None] * len(input_lines)
         total_batch = math.ceil(len(input_lines) / args.batch_size)
@@ -203,9 +208,17 @@ def main():
                 next_i += args.batch_size
                 max_a_len = max([len(x) for x in buf])
                 instances = []
+                print(buf[0])
                 for instance in [(x, max_a_len) for x in buf]:
                     for proc in bi_uni_pipeline:
                         instances.append(proc(instance))
+                print(instances[0][0])
+                
+                input_tokens_dict = {}
+                for i in range(len(instances)):
+                    for j in range(len(buf[i])):
+                        input_tokens_dict[instances[i][0][j+1]]=buf[i][j]
+                print(input_tokens_dict)
                 with torch.no_grad():
                     batch = seq2seq_loader.batch_list_to_batch_tensors(
                         instances)
@@ -214,31 +227,55 @@ def main():
                     input_ids, token_type_ids, position_ids, input_mask, mask_qkv, task_idx = batch
                     traces = model(input_ids, token_type_ids,
                                    position_ids, input_mask, task_idx=task_idx, mask_qkv=mask_qkv)
-                    print(traces['wids'][0])
-                    print(traces['wids'][0][0])
-                    print(traces['pred_seq'][0])
+                    print(input_ids)
+                    print(token_type_ids)
+                    print(position_ids)
+                    #print(traces['wids'][0])
+                    #print(traces['wids'][0][0])
+                    #print(traces['pred_seq'][0])
 
-                    print(traces['scores'][0])
-                    print(traces['pred_seq'])
-                    print(traces['wids'].shape)
-                    print(traces['ptrs'][0])
+                    #print(traces['scores'][0])
+                    #print(traces['pred_seq'])
+                    #print(traces['wids'].shape)
+                    #print(traces['ptrs'][0])
                     if args.beam_size > 1:
                         traces = {k: v.tolist() for k, v in traces.items()}
                         output_ids = traces['pred_seq']
                     else:
                         output_ids = traces.tolist()
                     output_sentences=[]
-                    for i in range(len(output_ids)):
-                            w_ids = output_ids[i]
-                            output_buf = tokenizer.convert_ids_to_tokens(w_ids)
-                            output_tokens = []
-                            for t in output_buf:
+                    print("buffer len= ",str(len(buf)))
+                    print("output len= ",str(len(output_ids)))
+                    for i in range(0,len(output_ids),4):
+                            w_ids_set = output_ids[i:i+4]
+                            input_token_ids=input_ids[i//4].cpu().numpy()[1:-1]
+                            input_tokens = [stemmer.stem(input_tokens_dict[j]) for j in input_token_ids]
+                            for w_ids in w_ids_set:
+                                output_buf = tokenizer.convert_ids_to_tokens(w_ids)
+                                output_tokens = []
+                                for t in output_buf:
+                                    if t in ("[SEP]", "[PAD]"):
+                                        break
+                                    output_tokens.append(t)
+                                output_sequence = ' '.join(detokenize(output_tokens))
+                            
+                            print(input_tokens)
+
+                            
+                            '''
+                            token_buf = data_tokenizer.convert_ids_to_tokens(input_ids[i][1:])
+                            token_tokens = []
+                            for t in token_buf:
                                 if t in ("[SEP]", "[PAD]"):
                                     break
-                                output_tokens.append(t)
-                            output_sequence = ' '.join(detokenize(output_tokens))
-                            output_sentences.append(output_sequence)
-                            #output_lines[buf_id[i]] = output_sequence
+                                token_tokens.append(t)
+                            token_sequence = ' '.join(detokenize(token_tokens))
+                            print(token_sequence)
+                            '''
+
+                            print(output_sequence)
+                            #output_sentences.append(output_sequence)
+                            output_lines[buf_id[i]] = output_sequence
                             if args.need_score_traces and i<len(buf):
                                 score_trace_list[buf_id[i]] = {
                                     'scores': traces['scores'][i], 'wids': traces['wids'][i], 'ptrs': traces['ptrs'][i]}
@@ -248,7 +285,7 @@ def main():
         else:
             fn_out = model_recover_path+'.'+args.split
         with open(fn_out, "w", encoding="utf-8") as fout:
-            for l in output_sentences:#output_lines:
+            for l in output_lines:#output_sentences:#output_lines:
                 fout.write(l)
                 fout.write("\n")
 
